@@ -64,7 +64,8 @@ abstract class AppDatabase : RoomDatabase() {
          * @param context The application context, needed to build the database.
          * @return The singleton AppDatabase instance.
          */
-        fungetDatabase(context: Context): AppDatabase {
+        // Corrected: "fun getDatabase" instead of "fungetDatabase"
+        fun getDatabase(context: Context): AppDatabase {
             // Return the existing instance if it's not null.
             // If it is null, then create the database in a synchronized block.
             // Synchronized block ensures that only one thread can execute this code at a time,
@@ -74,7 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext, // Use application context
                     AppDatabase::class.java,    // The AppDatabase class
-                    "nutritrack_database"       // Name of the database file
+                    "nutricoach_database"       // Name of the database file (changed to nutricoach)
                 )
                     // .fallbackToDestructiveMigration() // If you increment version without a proper migration,
                     // this will delete and recreate the DB.

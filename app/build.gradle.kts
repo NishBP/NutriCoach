@@ -3,12 +3,14 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("kotlin-kapt") // Add Kotlin Annotation Processing Tool
+    id("kotlin-kapt") // Kotlin Annotation Processing Tool
+    id("org.jetbrains.kotlin.plugin.compose") // Compose Compiler
 }
 
 android {
     namespace = "com.fit2081.nishal34715231"
-    compileSdk = 34
+    compileSdk = 35 // Consider aligning with targetSdk (34) or ensure stability of SDK 35
+    // For stability, you might prefer compileSdk = 34 if targetSdk is 34
 
     defaultConfig {
         applicationId = "com.fit2081.nishal34715231"
@@ -43,7 +45,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        // kotlinCompilerExtensionVersion is managed by the Compose plugin and BOM
     }
     packaging {
         resources {
@@ -53,42 +55,63 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2024.04.01"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // Assuming your libs.versions.toml [versions] has:
+    // coreKtx = "1.15.0" (or the version you intend for core-ktx)
+    // lifecycleRuntimeKtx = "2.8.7" (or the version for lifecycle-runtime-ktx)
+    // activityCompose = "1.10.1" (or the version for activity-compose)
+    // composeBom = "2024.04.01" (this is the actual BOM version string)
+    // junit = "4.13.2"
+    // androidxJunit = "1.2.1" (for androidx.test.ext:junit)
+    // espressoCore = "3.6.1" (for androidx.test.espresso:espresso-core)
+    // roomVersion = "2.6.1"
+    // lifecycleVersion = "2.7.0" (or newer, e.g., "2.8.7" if compatible for all lifecycle components)
+    // kotlinxCoroutinesCore = "1.7.3"
+    // kotlinxCoroutinesAndroid = "1.7.3"
+    // gson = "2.10.1"
+
+    // And your libs.versions.toml [libraries] section defines aliases like:
+    // androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+    // androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+    // androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+    // androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+    // androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+    // etc.
+
+    implementation(libs.androidx.core.ktx) // Corrected: e.g., from libs.androidx.core.ktx.v1120
+    implementation(libs.androidx.lifecycle.runtime.ktx) // Corrected: e.g., from libs.androidx.lifecycle.runtime.ktx.v270
+    implementation(libs.androidx.activity.compose) // Corrected: e.g., from libs.androidx.activity.compose.v182
+
+    implementation(platform(libs.androidx.compose.bom)) // Corrected: e.g., from libs.androidx.compose.bom.v20250501
+    // Use platform() for BOMs
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit) // Corrected: e.g., from libs.androidx.junit.v115
+    androidTestImplementation(libs.androidx.test.espresso.core) // Corrected: e.g., from libs.androidx.espresso.core.v351
+    androidTestImplementation(platform(libs.androidx.compose.bom)) // BOM for test dependencies
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Room components
-    val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    annotationProcessor("androidx.room:room-compiler:$roomVersion")
-    // To use Kotlin annotation processing tool (kapt)
-    kapt("androidx.room:room-compiler:$roomVersion")
-    // Kotlin Extensions and Coroutines support for Room
-    implementation("androidx.room:room-ktx:$roomVersion")
+    implementation(libs.androidx.room.runtime)
+    kapt(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.ktx)
 
     // Lifecycle components for ViewModel and LiveData/Flow
-    val lifecycleVersion = "2.7.0"
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycleVersion")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycleVersion") // If you choose LiveData
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion") // For collecting flows in Compose
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.livedata.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
 
-    // Gson for Type Converters (converting List<String> to JSON String)
-    implementation("com.google.code.gson:gson:2.10.1")
-
+    // Gson for Type Converters
+    implementation(libs.google.gson) // Assuming alias is 'google-gson' or similar for com.google.code.gson:gson
+    // If your alias is just 'gson', then libs.gson is correct.
 }

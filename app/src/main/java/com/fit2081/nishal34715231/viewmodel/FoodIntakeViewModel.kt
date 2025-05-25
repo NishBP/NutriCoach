@@ -7,19 +7,18 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.fit2081.nishal34715231.data.AppDatabase
 import com.fit2081.nishal34715231.data.FoodIntakeData
-import com.fit2081.nishal34715231.repository.NutriTrackRepository
-import kotlinx.coroutines.flow.firstOrNull
+import com.fit2081.nishal34715231.repository.NutriCoachRepository
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel for managing FoodIntakeData (questionnaire responses).
- * Interacts with NutriTrackRepository.
+ * Interacts with NutriCoachRepository.
  *
  * @param application The application instance.
  */
 class FoodIntakeViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: NutriTrackRepository
+    private val repository: NutriCoachRepository
 
     // LiveData to hold the current user's food intake data.
     // Observed by the QuestionnaireScreen.
@@ -29,7 +28,8 @@ class FoodIntakeViewModel(application: Application) : AndroidViewModel(applicati
     init {
         val patientDao = AppDatabase.getDatabase(application).patientDao()
         val foodIntakeDataDao = AppDatabase.getDatabase(application).foodIntakeDataDao()
-        repository = NutriTrackRepository(patientDao, foodIntakeDataDao)
+        val nutriCoachTipDao = AppDatabase.getDatabase(application).nutriCoachTipDao() // Added this line
+        repository = NutriCoachRepository(patientDao, foodIntakeDataDao, nutriCoachTipDao) // Updated this line
     }
 
     /**

@@ -3,6 +3,7 @@ package com.fit2081.nishal34715231.data
 import androidx.room.TypeConverter
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.util.Date
 
 /**
  * Type converters for Room to handle complex data types that Room doesn't support natively.
@@ -39,5 +40,27 @@ class Converters {
         }
         // Use Gson to convert the List<String> into a JSON string
         return Gson().toJson(list)
+    }
+
+    /**
+     * Converts a Date to a Long (timestamp).
+     * Room will use this when writing to the database.
+     * @param date The Date to convert.
+     * @return A Long representation of the date (milliseconds since epoch), or null if input is null.
+     */
+    @TypeConverter
+    fun fromDate(date: Date?): Long? {
+        return date?.time
+    }
+
+    /**
+     * Converts a Long (timestamp) to a Date.
+     * Room will use this when reading from the database.
+     * @param value The timestamp in milliseconds since epoch.
+     * @return A Date object, or null if input is null.
+     */
+    @TypeConverter
+    fun toDate(value: Long?): Date? {
+        return value?.let { Date(it) }
     }
 }

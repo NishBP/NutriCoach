@@ -1,18 +1,15 @@
+// File: app/src/main/java/com/fit2081/nishal34715231/data/Patient.kt
 package com.fit2081.nishal34715231.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-/**
- * Represents the 'patients' table in the Room database.
- * Each instance of this class is a row in the table.
- */
 @Entity(tableName = "patients")
 data class Patient(
-    @PrimaryKey val userId: String, // Unique identifier for the patient
-    val phoneNumber: String?, // Patient's phone number
-    val name: String?, // Patient's name
-    val sex: String?, // Patient's sex (e.g., "Male", "Female")
+    @PrimaryKey val userId: String,
+    var phoneNumber: String?,
+    var name: String?, // Name will be null initially from CSV, set on account claim
+    val sex: String?,
 
     // HEIFA scores and other nutritional scores
     val heifaTotalScore: Float?,
@@ -23,10 +20,12 @@ data class Patient(
     val meatFishPoultryScore: Float?,
     val fatsOilsScore: Float?,
     val waterScore: Float?,
-    val dietVarietyScore: Float?,
+    // dietVarietyScore removed as it's not in CSV
     val addedSugarScore: Float?,
     val alcoholScore: Float?,
-    val outsideHomeScore: Float?
+    // outsideHomeScore removed as it's not in CSV
+
+    // Fields for Assignment 3 Login System
+    var password: String? = null,
+    var isAccountClaimed: Boolean = false
 )
-
-

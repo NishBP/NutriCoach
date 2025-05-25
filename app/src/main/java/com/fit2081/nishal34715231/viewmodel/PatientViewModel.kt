@@ -1,3 +1,4 @@
+// File: app/src/main/java/com/fit2081/nishal34715231/viewmodel/PatientViewModel.kt
 package com.fit2081.nishal34715231.viewmodel
 
 import android.app.Application
@@ -8,79 +9,143 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.fit2081.nishal34715231.data.AppDatabase
 import com.fit2081.nishal34715231.data.Patient
-import com.fit2081.nishal34715231.repository.NutriTrackRepository
+import com.fit2081.nishal34715231.repository.NutriCoachRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/**
- * ViewModel for managing Patient data.
- * It interacts with the NutriTrackRepository to fetch and manage patient information.
- * Extends AndroidViewModel to have access to the Application context, which is needed
- * to initialize the database and repository.
- *
- * @param application The application instance.
- */
+// Enum to represent different states of login/registration process
+sealed class AuthResult {
+    object Loading : AuthResult()
+    data class Success(val patient: Patient) : AuthResult()
+    data class Error(val message: String) : AuthResult()
+    object Idle : AuthResult() // Initial state or after a non-critical operation
+}
+
 class PatientViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: NutriTrackRepository
+    private val repository: NutriCoachRepository
 
-    // LiveData to hold a single patient's details, typically fetched by ID.
-    // This can be observed by the UI (e.g., InsightsScreen).
-    // Using MutableLiveData internally and exposing LiveData externally is a common pattern.
-    private val _selectedPatient = MutableLiveData<Patient?>()
-    val selectedPatient: LiveData<Patient?> = _selectedPatient
+    // LiveData for all patient UserIDs (for the dropdown)
+    val allPatientUserIds: LiveData<List<String>>
 
-    // LiveData to hold the list of all patients.
-    // Could be used if you need to display a list of all patients somewhere.
+    // Add this: LiveData for all patients (for clinician dashboard)
     val allPatients: LiveData<List<Patient>>
 
+    // LiveData to communicate authentication results to the UI
+    private val _authResult = MutableLiveData<AuthResult>(AuthResult.Idle)
+    val authResult: LiveData<AuthResult> = _authResult
+
+    // LiveData to hold the currently logged-in/selected patient details for other screens
+    private val _currentPatient = MutableLiveData<Patient?>()
+    val currentPatient: LiveData<Patient?> = _currentPatient
+
     init {
-        // Get instances of the DAOs from the AppDatabase
         val patientDao = AppDatabase.getDatabase(application).patientDao()
         val foodIntakeDataDao = AppDatabase.getDatabase(application).foodIntakeDataDao()
-        // Initialize the repository with the DAOs
-        repository = NutriTrackRepository(patientDao, foodIntakeDataDao)
+        val nutriCoachTipDao = AppDatabase.getDatabase(application).nutriCoachTipDao() // Added this line
+        repository = NutriCoachRepository(patientDao, foodIntakeDataDao, nutriCoachTipDao) // Updated this line
 
-        // Initialize allPatients by converting the Flow from the repository to LiveData
+        // Fetch all patient UserIDs for the dropdown
+        allPatientUserIds = repository.getAllPatientUserIds().asLiveData()
+
+        // Add this: Fetch all patients for the clinician dashboard
         allPatients = repository.getAllPatients().asLiveData()
     }
 
     /**
-     * Fetches a patient by their ID and updates the _selectedPatient LiveData.
-     * This is a suspend function and should be called from a coroutine,
-     * typically launched from the UI or another ViewModel function.
-     *
-     * For reactive updates directly from Flow to UI (Compose), you might collect the Flow
-     * in the Composable. If using LiveData for simplicity or with older UI patterns:
-     *
-     * @param userId The ID of the patient to fetch.
+     * Handles the account claim process.
+     * Validates UserID and PhoneNumber against the database (pre-populated from CSV).
+     * If valid, updates the patient record with name, password, and sets isAccountClaimed to true.
      */
-    fun loadPatientById(userId: String) {
+    fun claimAccount(userId: String, phoneNumberInput: String, nameInput: String, passwordInput: String) {
+        _authResult.value = AuthResult.Loading
         viewModelScope.launch {
-            // Collect the Flow from the repository and update LiveData
-            // This approach makes selectedPatient LiveData update reactively.
-            repository.getPatientById(userId).collect { patient ->
-                _selectedPatient.postValue(patient)
+            val patient = repository.getPatientByIdOnce(userId)
+
+            if (patient == null) {
+                _authResult.postValue(AuthResult.Error("User ID not found."))
+                return@launch
+            }
+
+            if (patient.isAccountClaimed) {
+                _authResult.postValue(AuthResult.Error("Account already claimed. Please login."))
+                return@launch
+            }
+
+            // Validate phone number from DB (which came from CSV)
+            if (patient.phoneNumber != phoneNumberInput) {
+                _authResult.postValue(AuthResult.Error("Invalid User ID or Phone Number."))
+                return@launch
+            }
+
+            // Update patient details
+            patient.name = nameInput
+            patient.password = passwordInput // In a real app, hash the password
+            patient.isAccountClaimed = true
+
+            try {
+                repository.updatePatient(patient)
+                _currentPatient.postValue(patient) // Set the current patient
+                _authResult.postValue(AuthResult.Success(patient))
+            } catch (e: Exception) {
+                _authResult.postValue(AuthResult.Error("Failed to claim account: ${e.message}"))
             }
         }
     }
 
     /**
-     * Inserts a new patient.
-     * Operations that modify the database are launched in viewModelScope.
-     * @param patient The patient to insert.
+     * Handles the login process.
+     * Validates UserID and password against the database.
      */
-    fun insertPatient(patient: Patient) = viewModelScope.launch {
-        repository.insertPatient(patient)
+    fun login(userId: String, passwordInput: String) {
+        _authResult.value = AuthResult.Loading
+        viewModelScope.launch {
+            val patient = repository.getPatientByIdOnce(userId)
+
+            if (patient == null) {
+                _authResult.postValue(AuthResult.Error("User ID not found."))
+                return@launch
+            }
+
+            if (!patient.isAccountClaimed) {
+                _authResult.postValue(AuthResult.Error("Account not claimed yet. Please register/claim your account."))
+                return@launch
+            }
+
+            if (patient.password != passwordInput) { // In a real app, compare hashed passwords
+                _authResult.postValue(AuthResult.Error("Invalid User ID or Password."))
+                return@launch
+            }
+            _currentPatient.postValue(patient) // Set the current patient
+            _authResult.postValue(AuthResult.Success(patient))
+        }
     }
 
     /**
-     * Updates an existing patient.
-     * @param patient The patient to update.
+     * Fetches a patient by their ID to display on other screens (e.g., Insights, Settings).
+     * This is an example of how other screens might get patient data.
      */
-    fun updatePatient(patient: Patient) = viewModelScope.launch {
-        repository.updatePatient(patient)
+    fun loadCurrentPatientById(userId: String) {
+        viewModelScope.launch {
+            repository.getPatientById(userId).collect { patient ->
+                _currentPatient.postValue(patient)
+            }
+        }
     }
 
-    // Add other patient-related operations as needed (e.g., delete)
+    /**
+     * Resets the authentication result to Idle.
+     * Useful after an error message has been shown and acted upon.
+     */
+    fun resetAuthResult() {
+        _authResult.value = AuthResult.Idle
+    }
+
+    // You might add a function here to check if a user (by userId) has completed the questionnaire
+    // This would involve querying FoodIntakeData via the repository.
+    // For now, this check can remain in the UI or be added later.
+    suspend fun getPatientByIdOnce(userId: String): Patient? {
+        return repository.getPatientByIdOnce(userId)
+    }
 }

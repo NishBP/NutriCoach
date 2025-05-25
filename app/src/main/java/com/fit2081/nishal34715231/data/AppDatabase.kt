@@ -23,8 +23,8 @@ import androidx.room.TypeConverters
  * the List<String> to String conversion for the foodCategories field.
  */
 @Database(
-    entities = [Patient::class, FoodIntakeData::class], // List your entities here
-    version = 1, // Start with version 1. Increment if you change the schema later.
+    entities = [Patient::class, FoodIntakeData::class, NutriCoachTip::class], // Added NutriCoachTip entity
+    version = 4, // Incremented version number due to schema change
     exportSchema = false // Set to true for production apps to export schema to a folder
 )
 @TypeConverters(Converters::class) // Register your type converters
@@ -43,6 +43,13 @@ abstract class AppDatabase : RoomDatabase() {
      * @return An instance of FoodIntakeDataDao.
      */
     abstract fun foodIntakeDataDao(): FoodIntakeDataDao
+
+    /**
+     * Abstract method to get the DAO for the NutriCoachTip entity.
+     * Room will generate the implementation.
+     * @return An instance of NutriCoachTipDao.
+     */
+    abstract fun nutriCoachTipDao(): NutriCoachTipDao
 
     /**
      * Companion object to provide a singleton instance of the database.
@@ -77,10 +84,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,    // The AppDatabase class
                     "nutricoach_database"       // Name of the database file (changed to nutricoach)
                 )
-                    // .fallbackToDestructiveMigration() // If you increment version without a proper migration,
-                    // this will delete and recreate the DB.
-                    // NOT recommended for production without data loss consideration.
-                    // .addCallback(MyDatabaseCallback(...)) // Optional: Add callbacks for DB creation/opening
+                    .fallbackToDestructiveMigration() // If you increment version without a proper migration, this will delete and recreate the DB.
                     .build() // Builds the database instance
 
                 INSTANCE = instance // Assign the newly created database instance to INSTANCE

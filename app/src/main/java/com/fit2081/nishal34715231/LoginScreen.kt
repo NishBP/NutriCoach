@@ -1,153 +1,160 @@
+// File: app/src/main/java/com/fit2081/nishal34715231/LoginScreen.kt
 package com.fit2081.nishal34715231
 
-import androidx.compose.foundation.layout.* // For layout composables like Column, Spacer
-import androidx.compose.material3.*
-import androidx.compose.runtime.* // For Compose states like remember, mutableStateOf, LaunchedEffect
-import androidx.compose.ui.Alignment // For aligning elements
-import androidx.compose.ui.Modifier // For styling and modifying composables
-import androidx.compose.ui.unit.dp // For using density-independent pixels
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
-import androidx.navigation.NavHostController
-import androidx.compose.ui.platform.LocalContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import android.content.Context
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import com.fit2081.nishal34715231.viewmodel.AuthResult
+import com.fit2081.nishal34715231.viewmodel.FoodIntakeViewModel // Import FoodIntakeViewModel
+import com.fit2081.nishal34715231.viewmodel.PatientViewModel
+import kotlinx.coroutines.launch // Import for launching coroutines
+
+private enum class LoginMode {
+    LOGIN, REGISTER_CLAIM
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
 fun LoginScreen(navController: NavHostController) {
-    // Get the current context to access assets
     val context = LocalContext.current
-    // State to store user data (UserID -> Phone Number) loaded from CSV
-    val userData = remember { mutableStateMapOf<String, String>() }
+    val patientViewModel: PatientViewModel = viewModel()
+    val foodIntakeViewModel: FoodIntakeViewModel = viewModel() // Instance of FoodIntakeViewModel
+    val scope = rememberCoroutineScope() // Coroutine scope for launching suspend functions
 
-    LaunchedEffect(Unit) {
-        fun readUserDataFromAssets() {
-            try {
-                // Debug print to verify we're trying to read the file
-                println("Attempting to read user_data.csv from assets")
+    var currentMode by remember { mutableStateOf(LoginMode.LOGIN) }
+    var selectedUserId by remember { mutableStateOf("") }
+    var isUserIdDropdownExpanded by remember { mutableStateOf(false) }
+    var phoneNumberInput by remember { mutableStateOf("") }
+    var nameInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var confirmPasswordInput by remember { mutableStateOf("") }
 
-                // List all files in assets to debug
-                val assetFiles = context.assets.list("")
-                println("Files in assets directory: ${assetFiles?.joinToString(", ")}")
+    val userIdsFromDb by patientViewModel.allPatientUserIds.observeAsState(initial = emptyList<String>())
+    val authResult by patientViewModel.authResult.observeAsState()
 
-                context.assets.open("user_data.csv").use { inputStream ->
-                    BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                        // Skip header
-                        reader.readLine()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
-                        // Read lines
-                        var line = reader.readLine() // Read the first line
-                        while (line != null) { // As long as the line is not null
-                            val parts = line.split(",")
-                            if (parts.size >= 2) {
-                                val phoneNumber = parts[0].trim()
-                                val userId = parts[1].trim()
-                                userData[userId] = phoneNumber
-                                println("Loaded: UserId=$userId, PhoneNumber=$phoneNumber")
-                            }
-                            line = reader.readLine() // Read the next line for the next iteration
+    LaunchedEffect(authResult) {
+        isLoading = false
+        when (val result = authResult) {
+            is AuthResult.Success -> {
+                errorMessage = null
+                val prefs = context.getSharedPreferences("NutriCoachPrefs", Context.MODE_PRIVATE)
+                prefs.edit().putString("LOGGED_IN_USER_ID", result.patient.userId).apply()
+
+                // Check questionnaire status from database and navigate
+                scope.launch {
+                    val foodIntakeRecord = foodIntakeViewModel.getFoodIntakeDataOnce(result.patient.userId)
+                    if (foodIntakeRecord != null) {
+                        // Questionnaire data exists, navigate to home
+                        navController.navigate("home/${result.patient.userId}") {
+                            popUpTo("welcome") { inclusive = true }
+                        }
+                    } else {
+                        // No questionnaire data, navigate to questionnaire screen
+                        navController.navigate("questionnaire/${result.patient.userId}") {
+                            popUpTo("welcome") { inclusive = true }
                         }
                     }
                 }
-
-                // Print the map size to confirm data was loaded
-                println("Total user records loaded: ${userData.size}")
-
-            } catch (e: Exception) {
-                println("Error reading CSV: ${e.message}")
-                e.printStackTrace()
+                patientViewModel.resetAuthResult()
             }
+            is AuthResult.Error -> errorMessage = result.message
+            is AuthResult.Loading -> {
+                isLoading = true
+                errorMessage = null
+            }
+            is AuthResult.Idle, null -> { /* Do nothing specific here */ }
         }
-
-        readUserDataFromAssets() // Call the function to load data
     }
 
-    // State for the selected User ID in the dropdown
-    var selectedUserId by remember { mutableStateOf("") }
-    // State to control the visibility of the User ID dropdown
-    var expanded by remember { mutableStateOf(false) }
-    // State for the entered phone number
-    var phoneNumber by remember { mutableStateOf("") }
-    // State for displaying any error message
-    var errorMessage by remember { mutableStateOf("") }
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = Color.Gray,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = Color.Gray,
+        cursorColor = MaterialTheme.colorScheme.primary,
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+    )
+    val textStyleWithFont = TextStyle(fontFamily = FunnelDisplay)
 
     MaterialTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            contentAlignment = Alignment.Center // Center all content in the Box
+            contentAlignment = Alignment.Center
         ) {
-            // Main content column - now centered in the Box
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Login header
                 Text(
-                    text = "Login",
+                    text = if (currentMode == LoginMode.LOGIN) "Login" else "Register / Claim Account",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontFamily = FunnelDisplay,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
+                        fontWeight = FontWeight.Bold
                     ),
-                    modifier = Modifier.padding(bottom = 24.dp)
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 20.dp)
                 )
 
-                // Dropdown for User ID
+                // User ID Dropdown
                 ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded },
-                    modifier = Modifier.fillMaxWidth(),
+                    expanded = isUserIdDropdownExpanded,
+                    onExpandedChange = { isUserIdDropdownExpanded = !isUserIdDropdownExpanded },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedTextField(
-                        value = selectedUserId,
-                        onValueChange = { /* User should select from dropdown */ },
+                        value = selectedUserId.ifEmpty { "Select User ID" },
+                        onValueChange = {},
                         label = { Text("User ID", fontFamily = FunnelDisplay) },
                         readOnly = true,
                         shape = RoundedCornerShape(18.dp),
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        textStyle = LocalTextStyle.current.copy(fontFamily = FunnelDisplay),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUserIdDropdownExpanded) },
+                        colors = textFieldColors,
+                        textStyle = textStyleWithFont,
                         modifier = Modifier.menuAnchor()
                     )
-
                     ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        expanded = isUserIdDropdownExpanded,
+                        onDismissRequest = { isUserIdDropdownExpanded = false }
                     ) {
-                        val userIds = userData.keys.toList()
-
-                        if (userIds.isEmpty()) {
+                        if (userIdsFromDb.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("No users available", fontFamily = FunnelDisplay) },
-                                onClick = { expanded = false }
+                                text = { Text("Loading User IDs...", fontFamily = FunnelDisplay) },
+                                onClick = { isUserIdDropdownExpanded = false }
                             )
                         } else {
-                            userIds.forEach { userId ->
+                            userIdsFromDb.forEach { userIdValue ->
                                 DropdownMenuItem(
-                                    text = { Text(userId, fontFamily = FunnelDisplay) },
+                                    text = { Text(userIdValue, fontFamily = FunnelDisplay) },
                                     onClick = {
-                                        selectedUserId = userId
-                                        expanded = false
+                                        selectedUserId = userIdValue
+                                        isUserIdDropdownExpanded = false
+                                        errorMessage = null
+                                        patientViewModel.resetAuthResult()
                                     }
                                 )
                             }
@@ -155,89 +162,147 @@ fun LoginScreen(navController: NavHostController) {
                     }
                 }
 
-                // Phone Number field
+                // Fields specific to Register/Claim mode
+                if (currentMode == LoginMode.REGISTER_CLAIM) {
+                    OutlinedTextField(
+                        value = phoneNumberInput,
+                        onValueChange = { newValue -> if (newValue.all { it.isDigit() }) phoneNumberInput = newValue },
+                        label = { Text("Phone Number (from CSV)", fontFamily = FunnelDisplay) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = textFieldColors,
+                        textStyle = textStyleWithFont,
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = { Text("Your Name", fontFamily = FunnelDisplay) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = textFieldColors,
+                        textStyle = textStyleWithFont,
+                        singleLine = true
+                    )
+                }
+
+                // Password Field
                 OutlinedTextField(
-                    value = phoneNumber,
-                    onValueChange = { phoneNumber = it },
-                    label = { Text("Phone Number", fontFamily = FunnelDisplay) },
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("Password", fontFamily = FunnelDisplay) },
                     visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FunnelDisplay)
+                    colors = textFieldColors,
+                    textStyle = textStyleWithFont,
+                    singleLine = true
                 )
 
-                // Error message
-                if (errorMessage.isNotEmpty()) {
+                // Confirm Password Field
+                if (currentMode == LoginMode.REGISTER_CLAIM) {
+                    OutlinedTextField(
+                        value = confirmPasswordInput,
+                        onValueChange = { confirmPasswordInput = it },
+                        label = { Text("Confirm Password", fontFamily = FunnelDisplay) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = textFieldColors,
+                        textStyle = textStyleWithFont,
+                        singleLine = true
+                    )
+                }
+
+                errorMessage?.let {
                     Text(
-                        text = errorMessage,
-                        color = Color(0xFFff5757),
+                        text = it,
+                        color = SalmonRed,
                         fontFamily = FunnelDisplay,
-                        fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
 
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
+                }
+
+                // Action Button
                 Button(
                     onClick = {
-                        // Validation logic
+                        errorMessage = null
+                        patientViewModel.resetAuthResult()
                         if (selectedUserId.isEmpty()) {
                             errorMessage = "Please select a User ID."
                             return@Button
                         }
-                        if (phoneNumber.isEmpty()) {
-                            errorMessage = "Please enter your phone number."
+                        if (passwordInput.isEmpty()) {
+                            errorMessage = "Password cannot be empty."
                             return@Button
                         }
-
-                        val registeredNumber = userData[selectedUserId]
-                        if (registeredNumber == null || registeredNumber != phoneNumber) {
-                            errorMessage = "Invalid User ID or Phone Number."
+                        if (currentMode == LoginMode.LOGIN) {
+                            patientViewModel.login(selectedUserId, passwordInput)
                         } else {
-                            errorMessage = "" // Clear error message on successful validation
-                            println("Login Successful for User ID: $selectedUserId")
-
-                            // Check if user has already completed the questionnaire
-                            val sharedPreferences = context.getSharedPreferences("NutriTrackerPrefs", android.content.Context.MODE_PRIVATE)
-                            val userPrefix = "user_${selectedUserId}_"
-                            val hasCompletedQuestionnaire = sharedPreferences.contains("${userPrefix}food_categories")
-
-                            if (hasCompletedQuestionnaire) {
-                                // User has already filled in questionnaire, go to home screen
-                                navController.navigate("home/$selectedUserId") {
-                                    // Clear back stack so user can't go back to login using back button
-                                    popUpTo("welcome") { inclusive = false }
-                                }
-                            } else {
-                                // User hasn't filled in questionnaire yet, go to questionnaire screen
-                                navController.navigate("questionnaire/$selectedUserId")
+                            if (phoneNumberInput.isEmpty()) {
+                                errorMessage = "Phone number cannot be empty for registration."
+                                return@Button
                             }
+                            if (nameInput.isEmpty()) {
+                                errorMessage = "Name cannot be empty for registration."
+                                return@Button
+                            }
+                            if (passwordInput.length < 6) {
+                                errorMessage = "Password must be at least 6 characters."
+                                return@Button
+                            }
+                            if (passwordInput != confirmPasswordInput) {
+                                errorMessage = "Passwords do not match."
+                                return@Button
+                            }
+                            patientViewModel.claimAccount(selectedUserId, phoneNumberInput, nameInput, passwordInput)
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
-                        .padding(top = 24.dp)
+                        .padding(top = 20.dp)
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF000000),
-                        contentColor = Color(0xFFc1ff72)
-                    )
+                        containerColor = Color.Black,
+                        contentColor = LimeGreen
+                    ),
+                    enabled = !isLoading
                 ) {
                     Text(
-                        text = "Continue",
+                        text = if (currentMode == LoginMode.LOGIN) "Continue" else "Register & Login",
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontFamily = FunnelDisplay,
                             fontWeight = FontWeight.Bold
                         )
+                    )
+                }
+
+                // Toggle mode button
+                TextButton(
+                    onClick = {
+                        currentMode = if (currentMode == LoginMode.LOGIN) LoginMode.REGISTER_CLAIM else LoginMode.LOGIN
+                        errorMessage = null
+                        patientViewModel.resetAuthResult()
+                        phoneNumberInput = ""
+                        nameInput = ""
+                        passwordInput = ""
+                        confirmPasswordInput = ""
+                    },
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Text(
+                        text = if (currentMode == LoginMode.LOGIN) "New user? Register/Claim Account" else "Already registered? Login",
+                        fontFamily = FunnelDisplay,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
